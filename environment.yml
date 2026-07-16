@@ -7,7 +7,7 @@ dependencies:
   - fastapi
   - uvicorn
   - boto3
-  - libcxx                
+  - libcxx
   - libta-lib>=0.6.4
   - python-dotenv
   - pandas>=2.3.2
@@ -20,7 +20,7 @@ dependencies:
   - docker-py
   - pip
   - pip:
-      - hummingbot
+      - hummingbot @ git+https://github.com/otakup0pe/hummingbot@7a59c27712f69b30b51cf76a1e430e937aa2df23
       - geckoterminal-py>=0.3.1
       - msgpack>=1.0.5
       - flake8

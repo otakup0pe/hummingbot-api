@@ -1,4 +1,4 @@
-.PHONY: setup run deploy stop install uninstall build install-pre-commit tailscale-status reset
+.PHONY: setup run deploy stop install uninstall build install-pre-commit tailscale-status reset test
 
 SETUP_SENTINEL := .setup-complete
 
@@ -59,6 +59,10 @@ tailscale-status:
 		echo "  Source run:    use 'make run' with Tailscale enabled (installs locally)"; \
 		exit 1; \
 	fi
+
+# Run the test suite
+test:
+	conda run --no-capture-output -n hummingbot-api python -m pytest test/ -v
 
 # Stop all services
 stop:

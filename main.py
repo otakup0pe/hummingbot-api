@@ -222,7 +222,9 @@ async def lifespan(app: FastAPI):
         broker_username=settings.broker.username,
         broker_password=settings.broker.password,
         db_manager=db_manager,
-        performance_dump_interval=settings.broker.performance_dump_interval
+        performance_dump_interval=settings.broker.performance_dump_interval,
+        broker_ssl=settings.broker.ssl,
+        broker_ca_cert=settings.broker.ca_cert
     )
 
     backtesting_service = BacktestingService()

@@ -20,17 +20,27 @@ class BotsOrchestrator:
     """Orchestrates Hummingbot instances using Docker and MQTT communication."""
 
     def __init__(self, broker_host, broker_port, broker_username, broker_password,
-                 db_manager: AsyncDatabaseManager, performance_dump_interval: int = 5):
+                 db_manager: AsyncDatabaseManager, performance_dump_interval: int = 5,
+                 broker_ssl: bool = False, broker_ca_cert: Optional[str] = None):
         self.broker_host = broker_host
         self.broker_port = broker_port
         self.broker_username = broker_username
         self.broker_password = broker_password
+        self.broker_ssl = broker_ssl
+        self.broker_ca_cert = broker_ca_cert
 
         # Initialize Docker client
         self.docker_client = docker.from_env()
 
         # Initialize MQTT manager
-        self.mqtt_manager = MQTTManager(host=broker_host, port=broker_port, username=broker_username, password=broker_password)
+        self.mqtt_manager = MQTTManager(
+            host=broker_host,
+            port=broker_port,
+            username=broker_username,
+            password=broker_password,
+            use_tls=broker_ssl,
+            ca_cert=broker_ca_cert,
+        )
 
         # Active bots tracking
         self.active_bots = {}

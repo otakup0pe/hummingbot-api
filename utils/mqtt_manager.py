@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import ssl
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -17,11 +18,21 @@ class MQTTManager:
     Uses asyncio-mqtt (aiomqtt) for asynchronous MQTT operations.
     """
 
-    def __init__(self, host: str, port: int, username: str, password: str):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        use_tls: bool = False,
+        ca_cert: Optional[str] = None,
+    ):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
+        self.use_tls = use_tls
+        self.ca_cert = ca_cert
 
         # Message handlers by topic pattern
         self._handlers: Dict[str, Callable] = {}
@@ -33,7 +44,7 @@ class MQTTManager:
 
         # Auto-discovered bots
         self._discovered_bots: Dict[str, float] = {}  # bot_id: last_seen_timestamp
-        
+
         # Message deduplication tracking
         self._processed_messages: Dict[str, float] = {}  # message_hash: timestamp
         self._message_ttl = 300  # 5 minutes TTL for processed messages
@@ -64,10 +75,31 @@ class MQTTManager:
         else:
             logger.info("MQTT client configured without authentication")
 
+        if self.use_tls:
+            logger.info(
+                "MQTT client configured for TLS (verifying broker cert against %s)",
+                self.ca_cert if self.ca_cert else "system trust store",
+            )
+
+    def _build_tls_context(self) -> ssl.SSLContext:
+        """Build an SSL context for a server-authenticated TLS connection to the broker.
+
+        Verifies the broker's certificate against ``ca_cert`` when provided, otherwise
+        against the system trust store. Server-auth only (no client certificate / mTLS).
+        """
+        context = ssl.create_default_context(
+            purpose=ssl.Purpose.SERVER_AUTH,
+            cafile=self.ca_cert if self.ca_cert else None,
+        )
+        return context
+
     @asynccontextmanager
     async def _get_client(self):
         """Get MQTT client for a single connection attempt."""
         client_id = f"hummingbot-api-{int(time.time())}"
+
+        # Optionally build a TLS context (server-auth) when TLS is enabled.
+        tls_context = self._build_tls_context() if self.use_tls else None
 
         # Create client with credentials if provided
         if self.username and self.password:
@@ -78,19 +110,27 @@ class MQTTManager:
                 password=self.password,
                 identifier=client_id,
                 keepalive=60,
+                tls_context=tls_context,
             )
         else:
-            client = aiomqtt.Client(hostname=self.host, port=self.port, identifier=client_id, keepalive=60)
+            client = aiomqtt.Client(
+                hostname=self.host,
+                port=self.port,
+                identifier=client_id,
+                keepalive=60,
+                tls_context=tls_context,
+            )
 
         async with client:
             self._connected = True
-            logger.info(f"✓ Connected to MQTT broker at {self.host}:{self.port}")
+            scheme = "mqtts" if self.use_tls else "mqtt"
+            logger.info(f"✓ Connected to MQTT broker at {scheme}://{self.host}:{self.port}")
 
             # Subscribe to topics
             for topic, qos in self._subscriptions:
                 await client.subscribe(topic, qos=qos)
             yield client
-            
+
         # Cleanup on exit
         self._connected = False
 
@@ -205,14 +245,14 @@ class MQTTManager:
             level = data.get("level_name") or data.get("levelname") or data.get("level", "INFO")
             message = data.get("msg") or data.get("message", "")
             timestamp = data.get("timestamp") or data.get("time") or time.time()
-            
+
             # Create hash for deduplication (bot_id + message + timestamp within 1 second)
             message_hash = f"{bot_id}:{message}:{int(timestamp)}"
         elif isinstance(data, str):
             message = data
             timestamp = time.time()
             level = "INFO"
-            
+
             # Create hash for string messages
             message_hash = f"{bot_id}:{message}:{int(timestamp)}"
         else:
